@@ -285,15 +285,15 @@ textarea {
 }
 
 /* ---------- Tablero y columnas ---------- */
-/* El tablero se desplaza de lado. En el móvil cada columna "encaja" al soltar el dedo */
+/* El tablero se desplaza de lado.
+   OJO: probé a poner scroll-snap para que las columnas "encajaran" en el móvil, pero en
+   algunas anchuras el navegador cargaba el tablero desplazado hasta el final. Lo quité. */
 .tablero {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.25rem 1rem 1.5rem;
   overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scroll-padding: 1rem;
 }
 
 .columnas {
@@ -307,8 +307,8 @@ textarea {
 .hueco-columna {
   flex: none;
   width: min(19rem, 84vw);
-  scroll-snap-align: start;
 }
+
 
 .columna {
   padding: 0.6rem;
@@ -569,11 +569,6 @@ body.arrastre-en-marcha {
   cursor: grabbing;
 }
 
-/* Mientras arrastro no quiero que el tablero "encaje" solo */
-body.arrastre-en-marcha .tablero {
-  scroll-snap-type: none;
-}
-
 /* ---------- Ventanas ---------- */
 .ventana {
   width: min(32rem, calc(100vw - 1.5rem));
@@ -669,7 +664,6 @@ body.arrastre-en-marcha .tablero {
 
   .tablero {
     padding: 0.25rem 1.5rem 1.5rem;
-    scroll-padding: 1.5rem;
   }
 }
 
