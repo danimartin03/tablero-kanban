@@ -620,6 +620,55 @@ function alPulsarTecla(evento) {
   moverYContar(donde.tarjeta.id, destino.id, posicion);
 }
 
+// ---------- Arrastrar y soltar ----------
+
+// Si pulsan en un asa, empiezo a arrastrar su tarjeta o su columna.
+// El arrastre en sí está en arrastrar.js; aquí solo digo qué hacer al soltar.
+function alPulsarAsa(evento) {
+  const asa = evento.target.closest('.asa');
+  if (!asa) return;
+
+  if (asa.matches('.asa-tarjeta')) {
+    const nota = asa.closest('.tarjeta');
+    const idTarjeta = Number(nota.dataset.tarjeta);
+    empezarArrastre(evento, nota, {
+      tipo: 'tarjeta',
+      sinReordenar: hayFiltro(),
+      alSoltar: function (seccionDestino, posicion) {
+        soltarTarjeta(idTarjeta, Number(seccionDestino.dataset.columna), posicion);
+      }
+    });
+    return;
+  }
+
+  const seccion = asa.closest('.columna');
+  const idColumna = Number(seccion.dataset.columna);
+  empezarArrastre(evento, seccion, {
+    tipo: 'columna',
+    alSoltar: function (nada, posicion) {
+      soltarColumna(idColumna, posicion);
+    }
+  });
+}
+
+function soltarTarjeta(idTarjeta, idColumna, posicion) {
+  // Con el filtro puesto hay tarjetas que no se ven, así que la posición que me llega
+  // no vale: en su columna la dejo donde estaba y en otra la mando al final
+  if (hayFiltro()) {
+    const donde = buscarTarjeta(tablero, idTarjeta);
+    posicion = donde.columna.id === idColumna ? donde.posicion : buscarColumna(tablero, idColumna).tarjetas.length;
+  }
+  moverYContar(idTarjeta, idColumna, posicion);
+}
+
+function soltarColumna(idColumna, posicion) {
+  if (moverColumna(tablero, idColumna, posicion)) guardar();
+  pintarConAnimacion();
+
+  const columna = buscarColumna(tablero, idColumna);
+  decirEstado('Columna ' + columna.nombre + ' en la posición ' + (tablero.columnas.indexOf(columna) + 1) + ' de ' + tablero.columnas.length + '.');
+}
+
 // ---------- Arranque ----------
 
 // Espero a DOMContentLoaded para que ya estén cargados todos los archivos JS
@@ -634,6 +683,7 @@ function arrancar() {
   porId('botonTema').addEventListener('click', cambiarTema);
   porId('columnas').addEventListener('click', alPulsarEnTablero);
   porId('columnas').addEventListener('keydown', alPulsarTecla);
+  porId('columnas').addEventListener('pointerdown', alPulsarAsa);
   porId('botonCerrarMover').addEventListener('click', function () { porId('dialogoMover').close(); });
 
   porId('botonNuevaColumna').addEventListener('click', function () { abrirDialogoColumna(null); });
