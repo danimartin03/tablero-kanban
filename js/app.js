@@ -174,6 +174,136 @@ function crearChipDeFecha(fecha, avisar, hoy) {
   return crear('span', 'chip chip-fecha', 'Para el ' + formatearFecha(fecha));
 }
 
+// ---------- Ventanas comunes ----------
+
+// Abro un <dialog> y espero a que se cierre. Devuelvo true si se cerró con "aceptar".
+// Los botones están dentro de un <form method="dialog">, así que al pulsarlos
+// el propio navegador cierra la ventana y me deja en returnValue el value del botón.
+function abrirDialogo(dialogo) {
+  return new Promise(function (resolver) {
+    // Lo vacío antes, porque si cierran con Escape se queda el valor de la vez anterior
+    dialogo.returnValue = '';
+    dialogo.showModal();
+    dialogo.addEventListener('close', function () {
+      resolver(dialogo.returnValue === 'aceptar');
+    }, { once: true });
+  });
+}
+
+function confirmar(pregunta, textoBoton) {
+  porId('textoConfirmar').textContent = pregunta;
+  porId('botonConfirmar').textContent = textoBoton;
+  return abrirDialogo(porId('dialogoConfirmar'));
+}
+
+function enseñarError(idParrafo, mensaje) {
+  porId(idParrafo).textContent = mensaje;
+  porId(idParrafo).hidden = mensaje === '';
+}
+
+// Aviso general debajo de la barra (límites alcanzados, archivo que no vale...)
+function avisar(mensaje) {
+  enseñarError('avisoGeneral', mensaje);
+}
+
+// ---------- Columnas ----------
+
+// La columna que tengo abierta en la ventana, o null si estoy creando una nueva
+let columnaEditada = null;
+
+function abrirDialogoColumna(columna) {
+  columnaEditada = columna;
+  porId('tituloDialogoColumna').textContent = columna ? 'Opciones de la columna' : 'Nueva columna';
+  porId('campoNombreColumna').value = columna ? columna.nombre : '';
+  enseñarError('errorColumna', '');
+
+  // Mover y borrar solo tienen sentido si la columna ya existe
+  porId('opcionesColumna').hidden = !columna;
+  if (columna) {
+    const posicion = tablero.columnas.indexOf(columna);
+    porId('botonColumnaIzquierda').disabled = posicion === 0;
+    porId('botonColumnaDerecha').disabled = posicion === tablero.columnas.length - 1;
+  }
+  porId('dialogoColumna').showModal();
+}
+
+function guardarColumna(evento) {
+  evento.preventDefault();
+  const nombre = limpiarTexto(porId('campoNombreColumna').value, LIMITE_NOMBRE_COLUMNA);
+  if (!nombre) {
+    enseñarError('errorColumna', 'Ponle un nombre a la columna.');
+    porId('campoNombreColumna').focus();
+    return;
+  }
+
+  let columna = columnaEditada;
+  if (columna) {
+    columna.nombre = nombre;
+  } else {
+    columna = anadirColumna(tablero, nombre);
+  }
+
+  guardar();
+  porId('dialogoColumna').close();
+  pintarTablero();
+  enfocarColumna(columna.id);
+  decirEstado('Columna ' + nombre + ' guardada.');
+}
+
+// pasos: -1 para la izquierda, 1 para la derecha
+function moverColumnaConBoton(pasos) {
+  const columna = columnaEditada;
+  const posicion = tablero.columnas.indexOf(columna);
+  moverColumna(tablero, columna.id, posicion + pasos);
+
+  guardar();
+  porId('dialogoColumna').close();
+  pintarTablero();
+  enfocarColumna(columna.id);
+  decirEstado('Columna ' + columna.nombre + ' movida a la posición ' + (tablero.columnas.indexOf(columna) + 1) + ' de ' + tablero.columnas.length + '.');
+}
+
+async function borrarColumnaConAviso() {
+  const columna = columnaEditada;
+  const cuantas = columna.tarjetas.length;
+  porId('dialogoColumna').close();
+
+  let pregunta = '¿Borrar la columna «' + columna.nombre + '»?';
+  if (cuantas === 1) pregunta = '¿Borrar la columna «' + columna.nombre + '» y su tarjeta? No se puede deshacer.';
+  if (cuantas > 1) pregunta = '¿Borrar la columna «' + columna.nombre + '» y sus ' + cuantas + ' tarjetas? No se puede deshacer.';
+
+  const seguro = await confirmar(pregunta, 'Borrar columna');
+  if (!seguro) {
+    enfocarColumna(columna.id);
+    return;
+  }
+
+  borrarColumna(tablero, columna.id);
+  guardar();
+  pintarTablero();
+  decirEstado('Columna ' + columna.nombre + ' borrada.');
+  porId('botonNuevaColumna').focus();
+}
+
+// Después de repintar, el botón que tenía el foco ya no existe.
+// Con esto lo devuelvo al botón de opciones de la columna.
+function enfocarColumna(idColumna) {
+  const boton = document.querySelector('[data-columna="' + idColumna + '"] .boton-opciones');
+  if (boton) boton.focus();
+}
+
+// ---------- Clics dentro del tablero ----------
+
+// Un solo listener para todo el tablero: miro qué botón se ha pulsado y de qué columna es.
+// Así no tengo que poner un listener a cada botón cada vez que repinto.
+function alPulsarEnTablero(evento) {
+  const boton = evento.target.closest('button');
+  if (!boton) return;
+  const columna = buscarColumna(tablero, Number(boton.closest('.columna').dataset.columna));
+
+  if (boton.matches('.boton-opciones')) abrirDialogoColumna(columna);
+}
+
 // ---------- Arranque ----------
 
 // Espero a DOMContentLoaded para que ya estén cargados todos los archivos JS
@@ -185,4 +315,12 @@ function arrancar() {
   pintarTablero();
 
   porId('botonTema').addEventListener('click', cambiarTema);
+  porId('columnas').addEventListener('click', alPulsarEnTablero);
+
+  porId('botonNuevaColumna').addEventListener('click', function () { abrirDialogoColumna(null); });
+  porId('formularioColumna').addEventListener('submit', guardarColumna);
+  porId('botonCancelarColumna').addEventListener('click', function () { porId('dialogoColumna').close(); });
+  porId('botonColumnaIzquierda').addEventListener('click', function () { moverColumnaConBoton(-1); });
+  porId('botonColumnaDerecha').addEventListener('click', function () { moverColumnaConBoton(1); });
+  porId('botonBorrarColumna').addEventListener('click', borrarColumnaConAviso);
 }
