@@ -258,7 +258,7 @@ function moverColumnaConBoton(pasos) {
 
   guardar();
   porId('dialogoColumna').close();
-  pintarTablero();
+  pintarConAnimacion();
   enfocarColumna(columna.id);
   decirEstado('Columna ' + columna.nombre + ' movida a la posición ' + (tablero.columnas.indexOf(columna) + 1) + ' de ' + tablero.columnas.length + '.');
 }
@@ -310,6 +310,7 @@ function alPulsarEnTablero(evento) {
   const tarjeta = buscarTarjeta(tablero, Number(nota.dataset.tarjeta)).tarjeta;
 
   if (boton.matches('.tarjeta-titulo')) abrirDialogoTarjeta(tarjeta, columna);
+  if (boton.matches('.boton-mover')) abrirDialogoMover(tarjeta);
 }
 
 // ---------- Etiquetas ----------
@@ -494,6 +495,131 @@ async function vaciarTablero() {
   decirEstado('Tablero vacío.');
 }
 
+// ---------- Animación al mover ----------
+
+function sinMovimiento() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+// Como al repintar los elementos se crean de nuevo, los reconozco por su id:
+// "t7" es la tarjeta 7 y "c2" la columna 2.
+function claveDe(elemento) {
+  return elemento.dataset.tarjeta ? 't' + elemento.dataset.tarjeta : 'c' + elemento.dataset.columna;
+}
+
+// Repinto el tablero, pero haciendo que cada cosa "viaje" desde donde estaba.
+// El truco tiene cuatro pasos:
+//   1. Apunto dónde está cada tarjeta y cada columna ANTES de repintar.
+//   2. Repinto: todo aparece ya en su sitio nuevo.
+//   3. Miro dónde ha quedado cada una y calculo cuánto se ha movido.
+//   4. La animo desde el sitio viejo hasta el nuevo.
+function pintarConAnimacion() {
+  const zona = porId('columnas');
+  const antes = new Map();
+  for (const elemento of zona.querySelectorAll('.columna, .tarjeta')) {
+    antes.set(claveDe(elemento), elemento.getBoundingClientRect());
+  }
+
+  pintarTablero();
+  if (sinMovimiento()) return;
+
+  for (const elemento of zona.querySelectorAll('.columna, .tarjeta')) {
+    const vieja = antes.get(claveDe(elemento));
+    if (!vieja) continue;
+
+    // OJO: si se ha movido la columna entera, sus tarjetas ya viajan con ella.
+    // Si las animara también, se moverían el doble.
+    if (elemento.matches('.tarjeta') && elemento.closest('.columna').dataset.movida) continue;
+
+    const nueva = elemento.getBoundingClientRect();
+    const moverX = vieja.left - nueva.left;
+    const moverY = vieja.top - nueva.top;
+    if (moverX === 0 && moverY === 0) continue;
+
+    if (elemento.matches('.columna')) elemento.dataset.movida = 'si';
+    elemento.animate(
+      [{ transform: 'translate(' + moverX + 'px, ' + moverY + 'px)' }, { transform: 'none' }],
+      { duration: 220, easing: 'ease-out' }
+    );
+  }
+}
+
+// ---------- Mover tarjetas sin arrastrar ----------
+
+// Muevo una tarjeta, guardo, repinto y cuento dónde ha quedado.
+// Lo usan el teclado, la ventana de "Mover" y el arrastre.
+function moverYContar(idTarjeta, idColumna, posicion) {
+  if (moverTarjeta(tablero, idTarjeta, idColumna, posicion)) guardar();
+  pintarConAnimacion();
+  enfocarTarjeta(idTarjeta);
+
+  const donde = buscarTarjeta(tablero, idTarjeta);
+  decirEstado('Tarjeta en ' + donde.columna.nombre + ', posición ' + (donde.posicion + 1) + ' de ' + donde.columna.tarjetas.length + '.');
+}
+
+function abrirDialogoMover(tarjeta) {
+  const donde = buscarTarjeta(tablero, tarjeta.id);
+  const zona = porId('opcionesMover');
+  zona.textContent = '';
+  porId('tituloMover').textContent = 'Mover «' + tarjeta.titulo + '»';
+
+  function anadirOpcion(texto, idColumna, posicion, desactivada) {
+    const boton = crear('button', 'boton', texto);
+    boton.type = 'button';
+    boton.disabled = desactivada;
+    boton.addEventListener('click', function () {
+      porId('dialogoMover').close();
+      moverYContar(tarjeta.id, idColumna, posicion);
+    });
+    zona.append(boton);
+  }
+
+  // Con el filtro puesto no dejo cambiar el orden, porque hay tarjetas que no se ven
+  if (!hayFiltro()) {
+    const esLaUltima = donde.posicion === donde.columna.tarjetas.length - 1;
+    anadirOpcion('↑ Subir', donde.columna.id, donde.posicion - 1, donde.posicion === 0);
+    anadirOpcion('↓ Bajar', donde.columna.id, donde.posicion + 1, esLaUltima);
+  }
+  for (const columna of tablero.columnas) {
+    if (columna === donde.columna) continue;
+    anadirOpcion('A «' + columna.nombre + '»', columna.id, columna.tarjetas.length, false);
+  }
+
+  porId('dialogoMover').showModal();
+}
+
+// Atajos: con el foco en una tarjeta, Alt + flechas la mueve
+function alPulsarTecla(evento) {
+  if (!evento.altKey) return;
+  const nota = evento.target.closest('.tarjeta');
+  if (!nota) return;
+
+  const donde = buscarTarjeta(tablero, Number(nota.dataset.tarjeta));
+  const numeroColumna = tablero.columnas.indexOf(donde.columna);
+  let destino = donde.columna;
+  let posicion = donde.posicion;
+
+  if (evento.key === 'ArrowUp') posicion -= 1;
+  else if (evento.key === 'ArrowDown') posicion += 1;
+  else if (evento.key === 'ArrowLeft') destino = tablero.columnas[numeroColumna - 1];
+  else if (evento.key === 'ArrowRight') destino = tablero.columnas[numeroColumna + 1];
+  else return;
+
+  // OJO: Alt + flecha izquierda es "página anterior" en el navegador. Con esto lo evito.
+  evento.preventDefault();
+  // Si ya está en la primera o la última columna, no hay a dónde ir
+  if (!destino) return;
+
+  if (hayFiltro()) {
+    if (destino === donde.columna) {
+      decirEstado('Con la búsqueda o el filtro puestos no se puede cambiar el orden.');
+      return;
+    }
+    posicion = destino.tarjetas.length;
+  }
+  moverYContar(donde.tarjeta.id, destino.id, posicion);
+}
+
 // ---------- Arranque ----------
 
 // Espero a DOMContentLoaded para que ya estén cargados todos los archivos JS
@@ -507,6 +633,8 @@ function arrancar() {
 
   porId('botonTema').addEventListener('click', cambiarTema);
   porId('columnas').addEventListener('click', alPulsarEnTablero);
+  porId('columnas').addEventListener('keydown', alPulsarTecla);
+  porId('botonCerrarMover').addEventListener('click', function () { porId('dialogoMover').close(); });
 
   porId('botonNuevaColumna').addEventListener('click', function () { abrirDialogoColumna(null); });
   porId('formularioColumna').addEventListener('submit', guardarColumna);
