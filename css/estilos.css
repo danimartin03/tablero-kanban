@@ -411,12 +411,12 @@ textarea {
   box-shadow: var(--sombra-nota);
 }
 
-.tarjeta[data-etiqueta="rojo"] { --papel: var(--papel-rojo); --punto: var(--punto-rojo); }
-.tarjeta[data-etiqueta="naranja"] { --papel: var(--papel-naranja); --punto: var(--punto-naranja); }
-.tarjeta[data-etiqueta="amarillo"] { --papel: var(--papel-amarillo); --punto: var(--punto-amarillo); }
-.tarjeta[data-etiqueta="verde"] { --papel: var(--papel-verde); --punto: var(--punto-verde); }
-.tarjeta[data-etiqueta="azul"] { --papel: var(--papel-azul); --punto: var(--punto-azul); }
-.tarjeta[data-etiqueta="morado"] { --papel: var(--papel-morado); --punto: var(--punto-morado); }
+[data-etiqueta="rojo"] { --papel: var(--papel-rojo); --punto: var(--punto-rojo); }
+[data-etiqueta="naranja"] { --papel: var(--papel-naranja); --punto: var(--punto-naranja); }
+[data-etiqueta="amarillo"] { --papel: var(--papel-amarillo); --punto: var(--punto-amarillo); }
+[data-etiqueta="verde"] { --papel: var(--papel-verde); --punto: var(--punto-verde); }
+[data-etiqueta="azul"] { --papel: var(--papel-azul); --punto: var(--punto-azul); }
+[data-etiqueta="morado"] { --papel: var(--papel-morado); --punto: var(--punto-morado); }
 
 .tarjeta-arriba {
   display: flex;
@@ -497,6 +497,13 @@ textarea {
   height: 0.7rem;
   border-radius: 50%;
   background: var(--punto);
+}
+
+/* La muestra de color en la ventana de etiquetas es un chip que hace de label */
+.tarjeta-muestra {
+  display: flex;
+  margin-bottom: 0.3rem;
+  font-size: 0.9rem;
 }
 
 .chip-fecha {

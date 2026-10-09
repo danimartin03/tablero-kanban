@@ -196,14 +196,14 @@ function confirmar(pregunta, textoBoton) {
   return abrirDialogo(porId('dialogoConfirmar'));
 }
 
-function enseñarError(idParrafo, mensaje) {
+function mostrarError(idParrafo, mensaje) {
   porId(idParrafo).textContent = mensaje;
   porId(idParrafo).hidden = mensaje === '';
 }
 
 // Aviso general debajo de la barra (límites alcanzados, archivo que no vale...)
 function avisar(mensaje) {
-  enseñarError('avisoGeneral', mensaje);
+  mostrarError('avisoGeneral', mensaje);
 }
 
 // ---------- Columnas ----------
@@ -215,7 +215,7 @@ function abrirDialogoColumna(columna) {
   columnaEditada = columna;
   porId('tituloDialogoColumna').textContent = columna ? 'Opciones de la columna' : 'Nueva columna';
   porId('campoNombreColumna').value = columna ? columna.nombre : '';
-  enseñarError('errorColumna', '');
+  mostrarError('errorColumna', '');
 
   // Mover y borrar solo tienen sentido si la columna ya existe
   porId('opcionesColumna').hidden = !columna;
@@ -231,7 +231,7 @@ function guardarColumna(evento) {
   evento.preventDefault();
   const nombre = limpiarTexto(porId('campoNombreColumna').value, LIMITE_NOMBRE_COLUMNA);
   if (!nombre) {
-    enseñarError('errorColumna', 'Ponle un nombre a la columna.');
+    mostrarError('errorColumna', 'Ponle un nombre a la columna.');
     porId('campoNombreColumna').focus();
     return;
   }
@@ -302,6 +302,196 @@ function alPulsarEnTablero(evento) {
   const columna = buscarColumna(tablero, Number(boton.closest('.columna').dataset.columna));
 
   if (boton.matches('.boton-opciones')) abrirDialogoColumna(columna);
+  if (boton.matches('.boton-anadir')) abrirDialogoTarjeta(null, columna);
+
+  // Los otros botones están dentro de una tarjeta
+  const nota = boton.closest('.tarjeta');
+  if (!nota) return;
+  const tarjeta = buscarTarjeta(tablero, Number(nota.dataset.tarjeta)).tarjeta;
+
+  if (boton.matches('.tarjeta-titulo')) abrirDialogoTarjeta(tarjeta, columna);
+}
+
+// ---------- Etiquetas ----------
+
+// Relleno un <select> con las etiquetas. Lo uso en el filtro y en la ventana de tarjeta,
+// que solo cambian en las primeras opciones.
+function pintarOpcionesDeEtiqueta(select, primeras) {
+  const elegida = select.value;
+  select.textContent = '';
+
+  for (const primera of primeras) {
+    const opcion = crear('option', '', primera.texto);
+    opcion.value = primera.valor;
+    select.append(opcion);
+  }
+  for (const color of ETIQUETAS) {
+    const opcion = crear('option', '', tablero.etiquetas[color]);
+    opcion.value = color;
+    select.append(opcion);
+  }
+
+  // Dejo elegido lo que había antes de repintar (si sigue existiendo)
+  select.value = elegida;
+  if (select.selectedIndex === -1) select.selectedIndex = 0;
+}
+
+function pintarFiltroDeEtiquetas() {
+  pintarOpcionesDeEtiqueta(porId('campoFiltro'), [
+    { valor: 'todas', texto: 'Todas' },
+    { valor: 'ninguna', texto: 'Sin etiqueta' }
+  ]);
+}
+
+function abrirDialogoEtiquetas() {
+  const zona = porId('camposEtiquetas');
+  zona.textContent = '';
+
+  for (const color of ETIQUETAS) {
+    const campo = crear('input');
+    campo.type = 'text';
+    campo.id = 'etiqueta-' + color;
+    campo.maxLength = LIMITE_NOMBRE_ETIQUETA;
+    campo.value = tablero.etiquetas[color];
+
+    // Reutilizo el estilo de la tarjeta para enseñar el puntito de cada color
+    const etiqueta = crear('label', 'chip chip-etiqueta tarjeta-muestra', NOMBRES_DE_ETIQUETA[color]);
+    etiqueta.htmlFor = campo.id;
+    etiqueta.dataset.etiqueta = color;
+
+    const caja = crear('div', 'campo');
+    caja.append(etiqueta, campo);
+    zona.append(caja);
+  }
+  porId('dialogoEtiquetas').showModal();
+}
+
+function guardarEtiquetas(evento) {
+  evento.preventDefault();
+  for (const color of ETIQUETAS) {
+    const nombre = limpiarTexto(porId('etiqueta-' + color).value, LIMITE_NOMBRE_ETIQUETA);
+    // Si la dejan en blanco, vuelve a llamarse como el color
+    tablero.etiquetas[color] = nombre || NOMBRES_DE_ETIQUETA[color];
+  }
+  guardar();
+  porId('dialogoEtiquetas').close();
+  pintarFiltroDeEtiquetas();
+  pintarTablero();
+  decirEstado('Nombres de las etiquetas guardados.');
+}
+
+// ---------- Tarjetas ----------
+
+// La tarjeta que tengo abierta en la ventana, o null si estoy creando una nueva
+let tarjetaEditada = null;
+
+function abrirDialogoTarjeta(tarjeta, columna) {
+  if (!tarjeta && contarTarjetas(tablero) >= LIMITE_TARJETAS) {
+    avisar('El tablero ya tiene ' + LIMITE_TARJETAS + ' tarjetas, que es el máximo. Borra alguna para añadir más.');
+    return;
+  }
+  avisar('');
+  tarjetaEditada = tarjeta;
+
+  porId('tituloDialogoTarjeta').textContent = tarjeta ? 'Editar tarjeta' : 'Nueva tarjeta';
+  porId('campoTitulo').value = tarjeta ? tarjeta.titulo : '';
+  porId('campoDescripcion').value = tarjeta ? tarjeta.descripcion : '';
+  porId('campoFecha').value = tarjeta ? tarjeta.fecha : '';
+  porId('botonBorrarTarjeta').hidden = !tarjeta;
+  mostrarError('errorTarjeta', '');
+
+  pintarOpcionesDeEtiqueta(porId('campoEtiqueta'), [{ valor: '', texto: 'Sin etiqueta' }]);
+  porId('campoEtiqueta').value = tarjeta ? tarjeta.etiqueta : '';
+
+  const selectColumna = porId('campoColumna');
+  selectColumna.textContent = '';
+  for (const otra of tablero.columnas) {
+    const opcion = crear('option', '', otra.nombre);
+    opcion.value = otra.id;
+    selectColumna.append(opcion);
+  }
+  selectColumna.value = columna.id;
+
+  porId('dialogoTarjeta').showModal();
+}
+
+function guardarTarjeta(evento) {
+  evento.preventDefault();
+  const titulo = limpiarTexto(porId('campoTitulo').value, LIMITE_TITULO);
+  if (!titulo) {
+    mostrarError('errorTarjeta', 'Ponle un título a la tarjeta.');
+    porId('campoTitulo').focus();
+    return;
+  }
+
+  const datos = {
+    titulo: titulo,
+    descripcion: limpiarTexto(porId('campoDescripcion').value, LIMITE_DESCRIPCION),
+    etiqueta: porId('campoEtiqueta').value,
+    fecha: porId('campoFecha').value
+  };
+  const idColumna = Number(porId('campoColumna').value);
+
+  let tarjeta = tarjetaEditada;
+  if (tarjeta) {
+    Object.assign(tarjeta, datos);
+    // Si le han cambiado la columna en el formulario, la paso al final de la nueva
+    const donde = buscarTarjeta(tablero, tarjeta.id);
+    if (donde.columna.id !== idColumna) {
+      moverTarjeta(tablero, tarjeta.id, idColumna, buscarColumna(tablero, idColumna).tarjetas.length);
+    }
+  } else {
+    tarjeta = anadirTarjeta(tablero, idColumna, datos);
+  }
+
+  guardar();
+  porId('dialogoTarjeta').close();
+  pintarTablero();
+  enfocarTarjeta(tarjeta.id);
+  decirEstado('Tarjeta ' + titulo + ' guardada.');
+}
+
+async function borrarTarjetaConAviso() {
+  const tarjeta = tarjetaEditada;
+  const columna = buscarTarjeta(tablero, tarjeta.id).columna;
+  porId('dialogoTarjeta').close();
+
+  const seguro = await confirmar('¿Borrar la tarjeta «' + tarjeta.titulo + '»?', 'Borrar tarjeta');
+  if (!seguro) {
+    enfocarTarjeta(tarjeta.id);
+    return;
+  }
+
+  borrarTarjeta(tablero, tarjeta.id);
+  guardar();
+  pintarTablero();
+  decirEstado('Tarjeta ' + tarjeta.titulo + ' borrada.');
+  document.querySelector('[data-columna="' + columna.id + '"] .boton-anadir').focus();
+}
+
+// Devuelvo el foco al título de una tarjeta después de repintar.
+// Si la tarjeta está oculta por el filtro no la encuentro, y no pasa nada.
+function enfocarTarjeta(idTarjeta) {
+  const titulo = document.querySelector('[data-tarjeta="' + idTarjeta + '"] .tarjeta-titulo');
+  if (titulo) titulo.focus();
+}
+
+async function vaciarTablero() {
+  const cuantas = contarTarjetas(tablero);
+  if (cuantas === 0) {
+    decirEstado('El tablero ya está vacío.');
+    return;
+  }
+
+  const seguro = await confirmar('¿Borrar las ' + cuantas + ' tarjetas del tablero? Las columnas se quedan. No se puede deshacer.', 'Vaciar tablero');
+  if (!seguro) return;
+
+  for (const columna of tablero.columnas) {
+    columna.tarjetas = [];
+  }
+  guardar();
+  pintarTablero();
+  decirEstado('Tablero vacío.');
 }
 
 // ---------- Arranque ----------
@@ -312,6 +502,7 @@ document.addEventListener('DOMContentLoaded', arrancar);
 function arrancar() {
   tablero = leerTablero();
   pintarBotonTema();
+  pintarFiltroDeEtiquetas();
   pintarTablero();
 
   porId('botonTema').addEventListener('click', cambiarTema);
@@ -323,4 +514,12 @@ function arrancar() {
   porId('botonColumnaIzquierda').addEventListener('click', function () { moverColumnaConBoton(-1); });
   porId('botonColumnaDerecha').addEventListener('click', function () { moverColumnaConBoton(1); });
   porId('botonBorrarColumna').addEventListener('click', borrarColumnaConAviso);
+
+  porId('formularioTarjeta').addEventListener('submit', guardarTarjeta);
+  porId('botonCancelarTarjeta').addEventListener('click', function () { porId('dialogoTarjeta').close(); });
+  porId('botonBorrarTarjeta').addEventListener('click', borrarTarjetaConAviso);
+  porId('botonEtiquetas').addEventListener('click', abrirDialogoEtiquetas);
+  porId('formularioEtiquetas').addEventListener('submit', guardarEtiquetas);
+  porId('botonCancelarEtiquetas').addEventListener('click', function () { porId('dialogoEtiquetas').close(); });
+  porId('botonVaciar').addEventListener('click', vaciarTablero);
 }
