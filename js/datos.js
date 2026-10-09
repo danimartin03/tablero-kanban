@@ -108,3 +108,35 @@ function validarTarjeta(datos) {
     fecha: datos.fecha
   };
 }
+
+// ---------- Exportar e importar ----------
+
+const NOMBRE_APP = 'tablero-kanban';
+const TAMANO_MAXIMO_ARCHIVO = 1024 * 1024; // 1 MB, de sobra para un tablero
+
+// El tablero como texto JSON. Le pongo delante el nombre de la app y una versión
+// para poder reconocer el archivo al importarlo.
+function exportarTablero(tablero) {
+  const datos = { app: NOMBRE_APP, version: 1, tablero: tablero };
+  return JSON.stringify(datos, null, 2);
+}
+
+// Paso el texto de un archivo a un tablero. Devuelvo { tablero, error }.
+function importarTablero(texto) {
+  let datos = null;
+  try {
+    datos = JSON.parse(texto);
+  } catch (error) {
+    return { tablero: null, error: 'El archivo no es un JSON válido.' };
+  }
+
+  if (!esObjeto(datos) || datos.app !== NOMBRE_APP) {
+    return { tablero: null, error: 'Este archivo no es un tablero exportado desde esta página.' };
+  }
+
+  const tablero = validarTablero(datos.tablero);
+  if (!tablero) {
+    return { tablero: null, error: 'El archivo tiene datos que no cuadran (columnas, tarjetas o etiquetas) y no lo he importado.' };
+  }
+  return { tablero: tablero, error: '' };
+}

@@ -34,6 +34,11 @@ function guardar() {
   porId('avisoGuardado').hidden = guardarTablero(tablero);
 }
 
+// "1 tarjeta" / "3 tarjetas"
+function contarConPalabra(cuantas) {
+  return cuantas === 1 ? '1 tarjeta' : cuantas + ' tarjetas';
+}
+
 function hayFiltro() {
   return filtro.texto.trim() !== '' || filtro.etiqueta !== 'todas';
 }
@@ -93,7 +98,7 @@ function crearColumna(columna, esLaUltima, hoy) {
 
   const total = columna.tarjetas.length;
   const contador = crear('span', 'contador', hayFiltro() ? visibles.length + ' de ' + total : String(total));
-  contador.setAttribute('aria-label', (total === 1 ? '1 tarjeta' : total + ' tarjetas'));
+  contador.setAttribute('aria-label', contarConPalabra(total));
 
   const opciones = crear('button', 'boton-icono boton-opciones', '⋯');
   opciones.type = 'button';
@@ -484,7 +489,7 @@ async function vaciarTablero() {
     return;
   }
 
-  const seguro = await confirmar('¿Borrar las ' + cuantas + ' tarjetas del tablero? Las columnas se quedan. No se puede deshacer.', 'Vaciar tablero');
+  const seguro = await confirmar('¿Borrar todas las tarjetas del tablero (' + contarConPalabra(cuantas) + ')? Las columnas se quedan. No se puede deshacer.', 'Vaciar tablero');
   if (!seguro) return;
 
   for (const columna of tablero.columnas) {
@@ -669,6 +674,83 @@ function soltarColumna(idColumna, posicion) {
   decirEstado('Columna ' + columna.nombre + ' en la posición ' + (tablero.columnas.indexOf(columna) + 1) + ' de ' + tablero.columnas.length + '.');
 }
 
+// ---------- Buscador y filtro ----------
+
+function alCambiarFiltro() {
+  filtro.texto = porId('campoBuscar').value;
+  filtro.etiqueta = porId('campoFiltro').value;
+  pintarTablero();
+
+  if (hayFiltro()) {
+    const visibles = document.querySelectorAll('.tarjeta').length;
+    decirEstado(visibles === 1 ? 'Se ve 1 tarjeta.' : 'Se ven ' + visibles + ' tarjetas.');
+  } else {
+    decirEstado('Se ven todas las tarjetas.');
+  }
+}
+
+// ---------- Exportar e importar ----------
+
+// Para descargar un texto que he creado en memoria, me invento un enlace y le hago clic
+function descargarTexto(texto, nombreArchivo) {
+  const url = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
+  const enlace = crear('a');
+  enlace.href = url;
+  enlace.download = nombreArchivo;
+  document.body.append(enlace);
+  enlace.click();
+  enlace.remove();
+  // Le doy un momento al navegador para que arranque la descarga antes de liberar la URL
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+function exportar() {
+  descargarTexto(exportarTablero(tablero), 'tablero-kanban.json');
+  decirEstado('Tablero exportado a un archivo JSON.');
+}
+
+async function alElegirArchivo() {
+  const campo = porId('campoImportar');
+  const archivo = campo.files[0];
+  // Vacío el campo para que se pueda volver a elegir el mismo archivo
+  campo.value = '';
+  if (!archivo) return;
+
+  if (archivo.size > TAMANO_MAXIMO_ARCHIVO) {
+    avisar('El archivo pesa demasiado para ser un tablero exportado.');
+    return;
+  }
+
+  let texto = '';
+  try {
+    texto = await archivo.text();
+  } catch (error) {
+    avisar('No he podido leer el archivo.');
+    return;
+  }
+
+  const resultado = importarTablero(texto);
+  if (!resultado.tablero) {
+    avisar(resultado.error);
+    return;
+  }
+  avisar('');
+
+  // Importar sustituye lo que hay, así que pregunto antes
+  const cuantas = contarTarjetas(tablero);
+  const pregunta = cuantas === 0
+    ? '¿Sustituir el tablero actual por el del archivo?'
+    : '¿Sustituir el tablero actual por el del archivo? Se perderá lo que hay ahora (' + contarConPalabra(cuantas) + ').';
+  const seguro = await confirmar(pregunta, 'Sustituir');
+  if (!seguro) return;
+
+  tablero = resultado.tablero;
+  guardar();
+  pintarFiltroDeEtiquetas();
+  pintarTablero();
+  decirEstado('Tablero importado: ' + contarTarjetas(tablero) + ' tarjetas en ' + tablero.columnas.length + ' columnas.');
+}
+
 // ---------- Arranque ----------
 
 // Espero a DOMContentLoaded para que ya estén cargados todos los archivos JS
@@ -700,4 +782,10 @@ function arrancar() {
   porId('formularioEtiquetas').addEventListener('submit', guardarEtiquetas);
   porId('botonCancelarEtiquetas').addEventListener('click', function () { porId('dialogoEtiquetas').close(); });
   porId('botonVaciar').addEventListener('click', vaciarTablero);
+
+  porId('campoBuscar').addEventListener('input', alCambiarFiltro);
+  porId('campoFiltro').addEventListener('change', alCambiarFiltro);
+  porId('botonExportar').addEventListener('click', exportar);
+  porId('botonImportar').addEventListener('click', function () { porId('campoImportar').click(); });
+  porId('campoImportar').addEventListener('change', alElegirArchivo);
 }

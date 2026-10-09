@@ -14,7 +14,7 @@
 let arrastre = null;
 
 const MARGEN_DE_BORDE = 60; // a cuántos píxeles del borde empieza a desplazarse solo
-const PASO_DE_BORDE = 12;   // cuánto se desplaza en cada fotograma
+const PASO_DE_BORDE = 8;    // cuánto se desplaza en cada fotograma
 
 // opciones: { tipo: 'tarjeta' o 'columna', sinReordenar: true/false, alSoltar: función }
 function empezarArrastre(evento, elemento, opciones) {
