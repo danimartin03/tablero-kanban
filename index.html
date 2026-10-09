@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tablero Kanban</title>
+  <meta name="description" content="Un tablero Kanban con columnas y tarjetas que se arrastran con ratón, dedo o teclado. Todo se guarda en tu navegador.">
+  <link rel="stylesheet" href="css/estilos.css">
+
+  <!-- Pongo el tema antes de pintar la página para que no parpadee al cargar -->
+  <script>
+    (function () {
+      var tema = null;
+      try { tema = JSON.parse(localStorage.getItem('tablero-kanban:tema')); } catch (error) { /* sin localStorage no pasa nada */ }
+      if (tema !== 'claro' && tema !== 'oscuro') {
+        tema = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'oscuro' : 'claro';
+      }
+      document.documentElement.dataset.tema = tema;
+    })();
+  </script>
+</head>
+<body>
+  <a class="saltar" href="#contenido">Saltar al contenido</a>
+
+  <header class="cabecera">
+    <p class="marca"><span class="marca-nota" aria-hidden="true"></span>Tablero Kanban</p>
+    <button type="button" class="boton boton-pequeno" id="botonTema" aria-pressed="false">Tema oscuro</button>
+  </header>
+
+  <main id="contenido">
+    <h1 class="solo-lectores">Tablero Kanban</h1>
+
+    <p class="aviso" id="avisoGuardado" role="alert" hidden>
+      No he podido guardar los cambios en este navegador. Exporta el tablero a JSON para no perderlo.
+    </p>
+
+    <div class="barra">
+      <div class="barra-campo barra-buscar">
+        <label for="campoBuscar">Buscar</label>
+        <input type="search" id="campoBuscar" placeholder="Título o descripción" autocomplete="off">
+      </div>
+      <div class="barra-campo">
+        <label for="campoFiltro">Etiqueta</label>
+        <select id="campoFiltro"></select>
+      </div>
+      <div class="barra-botones">
+        <button type="button" class="boton boton-pequeno" id="botonEtiquetas">Etiquetas</button>
+        <button type="button" class="boton boton-pequeno" id="botonExportar">Exportar</button>
+        <button type="button" class="boton boton-pequeno" id="botonImportar">Importar</button>
+        <input type="file" id="campoImportar" accept=".json,application/json" hidden>
+        <button type="button" class="boton boton-pequeno" id="botonVaciar">Vaciar</button>
+      </div>
+    </div>
+
+    <p class="aviso" id="avisoFiltro" hidden>
+      Con la búsqueda o el filtro puestos se pueden pasar tarjetas a otra columna, pero no cambiar su orden.
+    </p>
+    <p class="aviso" id="avisoImportar" role="alert" hidden></p>
+
+    <!-- El tablero se desplaza en horizontal. Las columnas las pinto desde JS -->
+    <div class="tablero" id="tablero">
+      <div class="columnas" id="columnas"></div>
+      <button type="button" class="columna-nueva" id="botonNuevaColumna">+ Añadir columna</button>
+    </div>
+
+    <!-- Aquí voy escribiendo lo que pasa para que lo lean los lectores de pantalla -->
+    <p class="solo-lectores" id="mensajeEstado" role="status" aria-live="polite"></p>
+  </main>
+
+  <footer class="pie">
+    <p>Hecho por Daniel Martín Pérez · <a href="https://github.com/danimartin03/tablero-kanban">Código en GitHub</a></p>
+    <p>Con el teclado: pon el foco en una tarjeta y pulsa <kbd>Alt</kbd> + flechas para moverla.</p>
+  </footer>
+
+  <!-- ============ Ventana: crear o editar una tarjeta ============ -->
+  <dialog class="ventana" id="dialogoTarjeta" aria-labelledby="tituloDialogoTarjeta">
+    <form id="formularioTarjeta" novalidate autocomplete="off">
+      <h2 id="tituloDialogoTarjeta">Nueva tarjeta</h2>
+
+      <div class="campo">
+        <label for="campoTitulo">Título</label>
+        <input type="text" id="campoTitulo" maxlength="80">
+      </div>
+      <div class="campo">
+        <label for="campoDescripcion">Descripción (opcional)</label>
+        <textarea id="campoDescripcion" rows="4" maxlength="500"></textarea>
+      </div>
+      <div class="fila">
+        <div class="campo">
+          <label for="campoEtiqueta">Etiqueta</label>
+          <select id="campoEtiqueta"></select>
+        </div>
+        <div class="campo">
+          <label for="campoFecha">Fecha límite (opcional)</label>
+          <input type="date" id="campoFecha">
+        </div>
+      </div>
+      <div class="campo">
+        <label for="campoColumna">Columna</label>
+        <select id="campoColumna"></select>
+      </div>
+
+      <p class="error" id="errorTarjeta" role="alert" hidden></p>
+
+      <div class="ventana-botones">
+        <button type="button" class="boton boton-peligro boton-izquierda" id="botonBorrarTarjeta">Borrar</button>
+        <button type="button" class="boton" id="botonCancelarTarjeta">Cancelar</button>
+        <button type="submit" class="boton boton-principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Ventana: mover una tarjeta sin arrastrar ============ -->
+  <dialog class="ventana ventana-estrecha" id="dialogoMover" aria-labelledby="tituloMover">
+    <h2 id="tituloMover">Mover tarjeta</h2>
+    <div class="lista-opciones" id="opcionesMover"></div>
+    <div class="ventana-botones">
+      <button type="button" class="boton" id="botonCerrarMover">Cerrar</button>
+    </div>
+  </dialog>
+
+  <!-- ============ Ventana: crear una columna o cambiar una que ya existe ============ -->
+  <dialog class="ventana ventana-estrecha" id="dialogoColumna" aria-labelledby="tituloDialogoColumna">
+    <form id="formularioColumna" novalidate autocomplete="off">
+      <h2 id="tituloDialogoColumna">Nueva columna</h2>
+      <div class="campo">
+        <label for="campoNombreColumna">Nombre de la columna</label>
+        <input type="text" id="campoNombreColumna" maxlength="40">
+      </div>
+      <p class="error" id="errorColumna" role="alert" hidden></p>
+
+      <div class="lista-opciones" id="opcionesColumna">
+        <button type="button" class="boton" id="botonColumnaIzquierda">← Mover a la izquierda</button>
+        <button type="button" class="boton" id="botonColumnaDerecha">Mover a la derecha →</button>
+        <button type="button" class="boton boton-peligro" id="botonBorrarColumna">Borrar columna</button>
+      </div>
+
+      <div class="ventana-botones">
+        <button type="button" class="boton" id="botonCancelarColumna">Cancelar</button>
+        <button type="submit" class="boton boton-principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Ventana: poner nombre a las etiquetas ============ -->
+  <dialog class="ventana ventana-estrecha" id="dialogoEtiquetas" aria-labelledby="tituloEtiquetas">
+    <form id="formularioEtiquetas" novalidate autocomplete="off">
+      <h2 id="tituloEtiquetas">Nombres de las etiquetas</h2>
+      <p class="ayuda">Ponle a cada color el nombre que te sirva: Urgente, Casa, Trabajo…</p>
+      <div id="camposEtiquetas"></div>
+      <div class="ventana-botones">
+        <button type="button" class="boton" id="botonCancelarEtiquetas">Cancelar</button>
+        <button type="submit" class="boton boton-principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ Ventana: confirmar algo que no tiene vuelta atrás ============ -->
+  <dialog class="ventana ventana-estrecha" id="dialogoConfirmar" aria-labelledby="textoConfirmar">
+    <form method="dialog">
+      <p class="pregunta" id="textoConfirmar"></p>
+      <div class="ventana-botones">
+        <button type="submit" class="boton" value="cancelar">Cancelar</button>
+        <button type="submit" class="boton boton-peligro" value="aceptar" id="botonConfirmar">Borrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/tablero.js" defer></script>
+  <script src="js/datos.js" defer></script>
+  <script src="js/arrastrar.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,685 @@
+/* ==========================================================
+   Tablero Kanban
+   La idea del diseño: un corcho con pósits. El fondo es gris
+   azulado, las columnas son bandejas y cada tarjeta es una
+   nota de papel del color de su etiqueta.
+   Está hecho móvil primero: lo de pantallas grandes va al final.
+   ========================================================== */
+
+/* ---------- Colores y medidas ---------- */
+:root {
+  --fondo: #dde3ed;
+  --bandeja: #eef2f7;
+  --superficie: #ffffff;
+  --tinta: #1c2333;
+  --tinta-suave: #485268;
+  --borde: #bcc6d6;
+  --violeta: #5a3fd0;
+  --sobre-violeta: #ffffff;
+  --peligro: #b3261e;
+  --pronto: #7d4a00;
+  --aviso-fondo: #fff3c4;
+  --sombra-nota: 0 1px 1px rgb(28 35 51 / 0.12), 0 3px 6px rgb(28 35 51 / 0.12);
+
+  /* El papel de cada nota según su etiqueta, y el color del puntito */
+  --papel-ninguna: #fffdf5;
+  --papel-rojo: #ffd9d4;
+  --papel-naranja: #ffe2c2;
+  --papel-amarillo: #fff1a3;
+  --papel-verde: #d6f3d1;
+  --papel-azul: #d3e7ff;
+  --papel-morado: #e7dbff;
+  --punto-rojo: #c5221f;
+  --punto-naranja: #b85c00;
+  --punto-amarillo: #8a6d00;
+  --punto-verde: #18753a;
+  --punto-azul: #1a5fc4;
+  --punto-morado: #7a2bc0;
+
+  --radio: 10px;
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  color-scheme: light;
+}
+
+/* En oscuro los papeles son tonos apagados para que no deslumbren */
+:root[data-tema="oscuro"] {
+  --fondo: #131722;
+  --bandeja: #1c2130;
+  --superficie: #252b3d;
+  --tinta: #e9ecf5;
+  --tinta-suave: #adb5ca;
+  --borde: #3a4360;
+  --violeta: #ab99ff;
+  --sobre-violeta: #150f33;
+  --peligro: #ff8f85;
+  --pronto: #ffc266;
+  --aviso-fondo: #3b3212;
+  --sombra-nota: 0 1px 1px rgb(0 0 0 / 0.4), 0 3px 6px rgb(0 0 0 / 0.3);
+
+  --papel-ninguna: #2b3147;
+  --papel-rojo: #4b2b2e;
+  --papel-naranja: #4a3622;
+  --papel-amarillo: #474120;
+  --papel-verde: #24412c;
+  --papel-azul: #233a58;
+  --papel-morado: #3a2e5c;
+  --punto-rojo: #ff8f85;
+  --punto-naranja: #ffb066;
+  --punto-amarillo: #f2d24b;
+  --punto-verde: #7bd88f;
+  --punto-azul: #8ab8ff;
+  --punto-morado: #c9a6ff;
+
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Si no pongo esto, los elementos con display propio ignoran el atributo hidden */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--fuente);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+ul {
+  list-style: none;
+}
+
+a {
+  color: var(--violeta);
+}
+
+kbd {
+  padding: 0.05em 0.4em;
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+  background: var(--superficie);
+  font: inherit;
+  font-size: 0.9em;
+}
+
+/* El foco siempre se ve, con el mismo estilo en toda la página */
+:focus-visible {
+  outline: 3px solid var(--violeta);
+  outline-offset: 2px;
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.saltar {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 30;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radio);
+  background: var(--tinta);
+  color: var(--fondo);
+}
+
+.saltar:focus {
+  top: 1rem;
+}
+
+/* ---------- Cabecera ---------- */
+.cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Un pósit pequeñito torcido, como logo */
+.marca-nota {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 2px;
+  background: var(--papel-amarillo);
+  box-shadow: var(--sombra-nota);
+  transform: rotate(-8deg);
+}
+
+/* ---------- Botones ---------- */
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boton:hover {
+  border-color: var(--violeta);
+}
+
+.boton-principal {
+  border-color: var(--violeta);
+  background: var(--violeta);
+  color: var(--sobre-violeta);
+}
+
+.boton-principal:hover {
+  filter: brightness(1.1);
+}
+
+.boton-peligro {
+  border-color: var(--peligro);
+  color: var(--peligro);
+}
+
+.boton-pequeno {
+  min-height: 2.5rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+/* ---------- Barra de búsqueda y botones ---------- */
+main {
+  padding: 0 0 2rem;
+}
+
+.barra {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+}
+
+.barra-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="search"],
+input[type="date"],
+select,
+textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--tinta-suave);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.aviso {
+  margin: 0 1rem 1rem;
+  padding: 0.6rem 0.9rem;
+  border-left: 5px solid var(--pronto);
+  border-radius: var(--radio);
+  background: var(--aviso-fondo);
+  font-size: 0.9rem;
+}
+
+.ayuda {
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
+}
+
+.error {
+  margin-top: 0.5rem;
+  color: var(--peligro);
+  font-weight: 600;
+}
+
+/* ---------- Tablero y columnas ---------- */
+/* El tablero se desplaza de lado. En el móvil cada columna "encaja" al soltar el dedo */
+.tablero {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.25rem 1rem 1.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding: 1rem;
+}
+
+.columnas {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.columna,
+.columna-nueva,
+.hueco-columna {
+  flex: none;
+  width: min(19rem, 84vw);
+  scroll-snap-align: start;
+}
+
+.columna {
+  padding: 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: calc(var(--radio) + 4px);
+  background: var(--bandeja);
+}
+
+.columna-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.columna-cabecera h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.contador {
+  flex: none;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--superficie);
+  color: var(--tinta-suave);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.boton-icono {
+  flex: none;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: var(--radio);
+  background: none;
+  color: var(--tinta);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.boton-icono:hover {
+  background: var(--superficie);
+}
+
+/* Le doy altura mínima para que se pueda soltar una tarjeta en una columna vacía */
+.lista-tarjetas {
+  display: grid;
+  gap: 0.6rem;
+  min-height: 2.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.columna-vacia {
+  padding: 0.5rem;
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.boton-anadir,
+.columna-nueva {
+  min-height: 2.75rem;
+  padding: 0.5rem;
+  border: 1px dashed var(--tinta-suave);
+  border-radius: var(--radio);
+  background: none;
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boton-anadir {
+  width: 100%;
+}
+
+.boton-anadir:hover,
+.columna-nueva:hover {
+  border-style: solid;
+  border-color: var(--violeta);
+  background: var(--superficie);
+}
+
+/* ---------- Tarjetas (los pósits) ---------- */
+.tarjeta {
+  --papel: var(--papel-ninguna);
+  --punto: var(--tinta-suave);
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem 0.6rem;
+  border-radius: 3px;
+  background: var(--papel);
+  box-shadow: var(--sombra-nota);
+}
+
+.tarjeta[data-etiqueta="rojo"] { --papel: var(--papel-rojo); --punto: var(--punto-rojo); }
+.tarjeta[data-etiqueta="naranja"] { --papel: var(--papel-naranja); --punto: var(--punto-naranja); }
+.tarjeta[data-etiqueta="amarillo"] { --papel: var(--papel-amarillo); --punto: var(--punto-amarillo); }
+.tarjeta[data-etiqueta="verde"] { --papel: var(--papel-verde); --punto: var(--punto-verde); }
+.tarjeta[data-etiqueta="azul"] { --papel: var(--papel-azul); --punto: var(--punto-azul); }
+.tarjeta[data-etiqueta="morado"] { --papel: var(--papel-morado); --punto: var(--punto-morado); }
+
+.tarjeta-arriba {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+/* El asa para arrastrar: seis puntitos dibujados con un degradado.
+   touch-action: none es para que en el móvil, al poner el dedo aquí,
+   el navegador no haga scroll y me deje arrastrar a mí. */
+.asa {
+  flex: none;
+  width: 1.5rem;
+  height: 2.25rem;
+  border-radius: 4px;
+  background: radial-gradient(circle, var(--tinta-suave) 1.5px, transparent 2px) center / 8px 8px;
+  background-clip: content-box;
+  padding: 0.45rem 0.3rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.asa:hover {
+  background-color: rgb(0 0 0 / 0.08);
+}
+
+.tarjeta-titulo {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.2rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.tarjeta-titulo:hover {
+  text-decoration: underline;
+}
+
+/* La descripción se corta a tres líneas para que las notas no sean enormes */
+.tarjeta-descripcion {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.tarjeta-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* El puntito de color va siempre acompañado del nombre de la etiqueta */
+.chip-etiqueta::before {
+  content: "";
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--punto);
+}
+
+.chip-fecha {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--tinta-suave);
+}
+
+.chip-fecha.vencida {
+  border-color: var(--peligro);
+  background: var(--peligro);
+  color: var(--papel-ninguna);
+}
+
+.chip-fecha.pronto {
+  border-color: var(--pronto);
+  background: var(--pronto);
+  color: var(--papel-ninguna);
+}
+
+.boton-mover {
+  margin-left: auto;
+  min-height: 2.25rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--tinta-suave);
+  border-radius: 999px;
+  background: none;
+  color: var(--tinta);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boton-mover:hover {
+  background: rgb(0 0 0 / 0.08);
+}
+
+/* ---------- Mientras se arrastra ---------- */
+/* Lo que llevo cogido va "flotando" por encima de todo, un poco torcido */
+.arrastrando {
+  position: fixed;
+  z-index: 20;
+  margin: 0;
+  opacity: 0.95;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.3);
+  cursor: grabbing;
+  /* Para que al preguntar "¿qué hay debajo del dedo?" no me responda con la propia tarjeta */
+  pointer-events: none;
+}
+
+/* El hueco marca dónde va a caer */
+.hueco,
+.hueco-columna {
+  border: 2px dashed var(--violeta);
+  border-radius: var(--radio);
+  background: rgb(90 63 208 / 0.08);
+}
+
+body.arrastre-en-marcha {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* Mientras arrastro no quiero que el tablero "encaje" solo */
+body.arrastre-en-marcha .tablero {
+  scroll-snap-type: none;
+}
+
+/* ---------- Ventanas ---------- */
+.ventana {
+  width: min(32rem, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  padding: 1.25rem;
+  border: 1px solid var(--borde);
+  border-radius: calc(var(--radio) + 4px);
+  background: var(--superficie);
+  color: var(--tinta);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.3);
+}
+
+.ventana-estrecha {
+  width: min(24rem, calc(100vw - 1.5rem));
+}
+
+.ventana::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.ventana h2 {
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.campo {
+  margin-top: 0.9rem;
+}
+
+.fila {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.fila > .campo {
+  flex: 1;
+  min-width: 0;
+}
+
+.pregunta {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.lista-opciones {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.ventana-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+/* El botón de borrar se queda a la izquierda, lejos del de guardar */
+.boton-izquierda {
+  margin-right: auto;
+}
+
+/* ---------- Pie ---------- */
+.pie {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem;
+  color: var(--tinta-suave);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ---------- Pantallas más grandes ---------- */
+@media (min-width: 44rem) {
+  .cabecera {
+    padding: 1rem 1.5rem;
+  }
+
+  .barra {
+    grid-template-columns: minmax(12rem, 22rem) 12rem 1fr;
+    align-items: end;
+    padding: 0 1.5rem 1rem;
+  }
+
+  .barra-botones {
+    justify-content: flex-end;
+  }
+
+  .aviso {
+    margin: 0 1.5rem 1rem;
+  }
+
+  .tablero {
+    padding: 0.25rem 1.5rem 1.5rem;
+    scroll-padding: 1.5rem;
+  }
+}
+
+/* ---------- Animaciones ---------- */
+/* Solo animo si la persona no ha pedido reducir el movimiento */
+@media (prefers-reduced-motion: no-preference) {
+  .boton,
+  .boton-anadir,
+  .columna-nueva {
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+
+  .arrastrando {
+    rotate: 2deg;
+  }
+
+  .saltar {
+    transition: top 0.15s;
+  }
+}
